@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiClient } from "@/lib/api";
 import type { Short } from "@/types/short";
-import { Heart, Search, X } from "lucide-react";
+import { Heart, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 export default function HomePage() {
@@ -28,7 +28,14 @@ export default function HomePage() {
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(false);
 
-  // Load favorites from localStorage on component mount
+  // Add Short modal state
+  const [addDialogOpen, setAddDialogOpen] = useState<boolean>(false);
+  const [newTitle, setNewTitle] = useState<string>("");
+  const [newVideoUrl, setNewVideoUrl] = useState<string>("");
+  const [newTags, setNewTags] = useState<string>("");
+  const [addLoading, setAddLoading] = useState<boolean>(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
   useEffect(() => {
     const storedFavorites = localStorage.getItem("short-flix-favorites");
     if (storedFavorites) {
@@ -41,7 +48,6 @@ export default function HomePage() {
     }
   }, []);
 
-  // Save favorites to localStorage whenever favorites change
   useEffect(() => {
     localStorage.setItem(
       "short-flix-favorites",
@@ -125,9 +131,53 @@ export default function HomePage() {
   const totalShorts = shorts.length;
   const totalFavorites = favorites.size;
 
+  // Handle Add Short form submit
+  const handleAddShortSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddError(null);
+
+    if (!newTitle.trim() || !newVideoUrl.trim() || !newTags.trim()) {
+      setAddError("All fields are required.");
+      return;
+    }
+
+    const tagsArray = newTags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
+    if (tagsArray.length === 0) {
+      setAddError("Please provide at least one tag.");
+      return;
+    }
+
+    try {
+      setAddLoading(true);
+
+      await apiClient.post("/shorts", {
+        title: newTitle.trim(),
+        videoUrl: newVideoUrl.trim(),
+        tags: tagsArray,
+      });
+
+      await fetchShorts();
+      setNewTitle("");
+      setNewVideoUrl("");
+      setNewTags("");
+      setAddDialogOpen(false);
+    } catch (err) {
+      console.error(err);
+      setAddError(
+        "Failed to add short. Please check your input and try again."
+      );
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 py-6 px-4 sm:px-6 lg:px-0">
-      {/* title + theme toggle */}
+      {/* title + theme toggle + add button */}
       <div className="flex flex-col items-start justify-between gap-4 border-b border-border/60 pb-4 sm:flex-row sm:items-center">
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 rounded-full bg-linear-to-r from-purple-500/80 via-pink-500/80 to-orange-400/80 px-3 py-1 text-xs font-medium text-white shadow-sm">
@@ -144,20 +194,33 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-stretch sm:self-auto">
-          <div className="flex flex-col items-end text-xs text-muted-foreground">
-            <span>
-              Shorts:{" "}
-              <span className="font-medium text-foreground">{totalShorts}</span>
-            </span>
-            <span>
-              Favorites:{" "}
-              <span className="font-medium text-foreground">
-                {totalFavorites}
+        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <div className="flex flex-col items-end text-xs text-muted-foreground">
+              <span>
+                Shorts:{" "}
+                <span className="font-medium text-foreground">
+                  {totalShorts}
+                </span>
               </span>
-            </span>
+              <span>
+                Favorites:{" "}
+                <span className="font-medium text-foreground">
+                  {totalFavorites}
+                </span>
+              </span>
+            </div>
+            <ModeToggle />
           </div>
-          <ModeToggle />
+
+          <Button
+            type="button"
+            className="mt-1 flex items-center gap-1 rounded-full bg-primary px-4 py-2 text-xs font-medium sm:mt-0"
+            onClick={() => setAddDialogOpen(true)}
+          >
+            <Plus className="h-4 w-4" />
+            Add Short
+          </Button>
         </div>
       </div>
 
@@ -263,10 +326,10 @@ export default function HomePage() {
               return (
                 <Card
                   key={short.id}
-                  className="group flex flex-col overflow-hidden border-border/60 bg-background/80 shadow-sm transition-shadow hover:shadow-lg duration-300"
+                  className="group flex flex-col overflow-hidden border-border/60 bg-background/80 shadow-sm transition-shadow duration-300 hover:shadow-lg"
                 >
                   <div
-                    className="relative cursor-pointer -mt-6"
+                    className="relative -mt-6 cursor-pointer"
                     onClick={() => openShort(short)}
                   >
                     <div className="relative aspect-video w-full overflow-hidden bg-muted">
@@ -343,7 +406,7 @@ export default function HomePage() {
           {activeShort && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex flex-wrap items-center justify-between gap-2 mt-4">
+                <DialogTitle className="mt-4 flex flex-wrap items-center justify-between gap-2">
                   <span>{activeShort.title}</span>
                   <div className="flex flex-wrap gap-1">
                     {activeShort.tags.map((tag) => (
@@ -373,6 +436,76 @@ export default function HomePage() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Short dialog */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className="max-w-md border-border/70 bg-background/95">
+          <DialogHeader>
+            <DialogTitle>Add a new short</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Provide a title, a direct video URL (.mp4) and one or more tags
+              separated by commas.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleAddShortSubmit} className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium" htmlFor="short-title">
+                Title
+              </label>
+              <Input
+                id="short-title"
+                placeholder="Enter short title"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium" htmlFor="short-url">
+                Video URL (.mp4)
+              </label>
+              <Input
+                id="short-url"
+                placeholder="https://example.com/video.mp4"
+                value={newVideoUrl}
+                onChange={(e) => setNewVideoUrl(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium" htmlFor="short-tags">
+                Tags (comma-separated)
+              </label>
+              <Input
+                id="short-tags"
+                placeholder="sample, short, fun"
+                value={newTags}
+                onChange={(e) => setNewTags(e.target.value)}
+              />
+            </div>
+
+            {addError && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {addError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAddDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={addLoading}>
+                {addLoading ? "Adding..." : "Add Short"}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
