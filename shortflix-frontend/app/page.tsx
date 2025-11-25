@@ -188,9 +188,8 @@ export default function HomePage() {
             Watch shorts instantly
           </h1>
           <p className="max-w-xl text-sm text-muted-foreground">
-            Scroll through bite-sized videos in a clean, Netflix-style grid.
-            Search by vibe, filter favorites, and enjoy short-form content in
-            seconds.
+            Scroll through bite-sized videos. Search by vibe, filter favorites,
+            and enjoy short-form content in seconds.
           </p>
         </div>
 
